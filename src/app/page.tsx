@@ -79,10 +79,8 @@ export default function Home() {
               {mappedCustomers.length} mapped · {unmappedCustomers.length} unmapped · {clusters.length} clusters
             </p>
           </div>
-          <button onClick={seedData} className="text-[11px] font-bold uppercase tracking-widest text-slate-500 hover:text-indigo-400 px-3 py-1 bg-white/5 rounded-full border border-white/10 transition-all">
-            Seed Sample Data
-          </button>
         </header>
+
 
         {/* Main Grid */}
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-5">

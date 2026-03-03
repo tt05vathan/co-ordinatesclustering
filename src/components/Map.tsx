@@ -50,8 +50,10 @@ function GeomanControls({ onDraw }: { onDraw: (layer: L.Layer) => void }) {
             drawPolygon: true,
             drawCircle: true,
             drawCircleMarker: false,
+            drawText: false,
             editMode: false,
             dragMode: false,
+            rotateMode: false,
             cutPolygon: false,
             removalMode: false,
         });
@@ -97,7 +99,7 @@ function FullscreenControl() {
 }
 
 export default function Map({ customers, selectedIds, onSelection, geocodingMode }: MapProps) {
-    const center: [number, number] = [12.9716, 77.5946];
+    const center: [number, number] = [17.3850, 78.4867];
     const mapRef = useRef<L.Map>(null);
 
     const toggleMarker = (id: string) => {
