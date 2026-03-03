@@ -1,14 +1,14 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Tooltip, useMap, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Tooltip, Circle, Polygon, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import '@geoman-io/leaflet-geoman-free';
 import '@geoman-io/leaflet-geoman-free/dist/leaflet-geoman.css';
 import 'leaflet/dist/leaflet.css';
 import booleanPointInPolygon from '@turf/boolean-point-in-polygon';
 import { point, polygon as turfPolygon } from '@turf/helpers';
-import { Customer } from '@/lib/kv';
+import { Customer, ClusterConfig } from '@/lib/kv';
 
 // Fix Leaflet marker icons
 const DefaultIcon = L.icon({
@@ -45,6 +45,8 @@ type MapProps = {
         onPin: (lat: number, lng: number) => void;
     };
     clusterColors?: Record<string, string>;
+    clusterConfigs?: ClusterConfig[];
+    onShapeDrawn?: (shape: Partial<ClusterConfig>) => void;
     fullHeight?: boolean;
 };
 
@@ -119,7 +121,7 @@ const createColorIcon = (color: string) => {
     });
 };
 
-export default function Map({ customers, selectedIds, onSelection, geocodingMode, clusterColors, fullHeight }: MapProps) {
+export default function Map({ customers, selectedIds, onSelection, geocodingMode, clusterColors, clusterConfigs, onShapeDrawn, fullHeight }: MapProps) {
     const center: [number, number] = [17.3850, 78.4867];
     const mapRef = useRef<L.Map>(null);
 
@@ -131,9 +133,9 @@ export default function Map({ customers, selectedIds, onSelection, geocodingMode
         onSelection(next);
     };
 
-    const handleDraw = (layer: L.Layer) => {
+    const handleDraw = (layer: any) => {
         const found: string[] = [];
-        if (layer instanceof L.Circle) {
+        if (layer.getLatLng && layer.getRadius) {
             const ctr = layer.getLatLng();
             const rad = layer.getRadius();
             customers.forEach(c => {
@@ -142,15 +144,28 @@ export default function Map({ customers, selectedIds, onSelection, geocodingMode
                     if (d !== undefined && d <= rad) found.push(c.id);
                 }
             });
-        } else if (layer instanceof L.Polygon) {
-            const coords = layer.getLatLngs()[0] as L.LatLng[];
-            const poly = turfPolygon([coords.map(ll => [ll.lng, ll.lat]).concat([[coords[0].lng, coords[0].lat]])]);
+            if (onShapeDrawn) {
+                onShapeDrawn({
+                    type: 'circle',
+                    circleData: { centerLat: ctr.lat, centerLng: ctr.lng, radius: rad }
+                });
+            }
+        } else if (layer.getLatLngs) {
+            let coords = layer.getLatLngs();
+            if (Array.isArray(coords[0])) coords = coords[0];
+            const latlngs = (coords as L.LatLng[]).map(ll => ({ lat: ll.lat, lng: ll.lng }));
+            const poly = turfPolygon([latlngs.map(ll => [ll.lng, ll.lat]).concat([[latlngs[0].lng, latlngs[0].lat]])]);
             customers.forEach(c => {
                 if (c.lat && c.lng && booleanPointInPolygon(point([c.lng, c.lat]), poly)) found.push(c.id);
             });
+            if (onShapeDrawn) {
+                onShapeDrawn({
+                    type: 'polygon',
+                    polygonData: latlngs
+                });
+            }
         }
         if (found.length > 0) {
-            // Add to existing selection (union)
             const next = Array.from(new Set([...selectedIds, ...found]));
             onSelection(next);
         }
@@ -179,6 +194,23 @@ export default function Map({ customers, selectedIds, onSelection, geocodingMode
                 <GeomanControls onDraw={handleDraw} />
                 <FullscreenControl />
                 <MapEvents active={!!geocodingMode} onMapClick={(lat, lng) => geocodingMode?.onPin(lat, lng)} />
+
+                {clusterConfigs?.map(config => (
+                    config.type === 'circle' && config.circleData ? (
+                        <Circle
+                            key={config.id}
+                            center={[config.circleData.centerLat, config.circleData.centerLng]}
+                            radius={config.circleData.radius}
+                            pathOptions={{ color: clusterColors?.[config.id] || '#6366f1', fillColor: clusterColors?.[config.id] || '#6366f1', fillOpacity: 0.1, weight: 1, dashArray: '5, 5' }}
+                        />
+                    ) : config.type === 'polygon' && config.polygonData ? (
+                        <Polygon
+                            key={config.id}
+                            positions={config.polygonData.map(p => [p.lat, p.lng])}
+                            pathOptions={{ color: clusterColors?.[config.id] || '#6366f1', fillColor: clusterColors?.[config.id] || '#6366f1', fillOpacity: 0.1, weight: 1, dashArray: '5, 5' }}
+                        />
+                    ) : null
+                ))}
 
                 {customers.filter(c => c.lat && c.lng).map(customer => {
                     const isSelected = selectedIds.includes(customer.id);

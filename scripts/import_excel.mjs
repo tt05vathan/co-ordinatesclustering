@@ -49,6 +49,7 @@ async function importExcel(filePath) {
 
         // Overwrite the existing data per user request
         await kv.set('customers', customers);
+        await kv.del('cluster_configs');
 
         console.log('✅ Clear and Import successful!');
         console.log(`${customers.filter(c => c.lat === undefined).length} customers were imported without coordinates.`);

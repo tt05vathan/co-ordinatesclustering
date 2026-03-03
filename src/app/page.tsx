@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { Customer } from '@/lib/kv';
+import { Customer, ClusterConfig } from '@/lib/kv';
 import { AlertCircle, CheckCircle2, MapPin, Layers, Save, X } from 'lucide-react';
 
 const Map = dynamic(() => import('@/components/Map'), {
@@ -16,12 +16,25 @@ const Map = dynamic(() => import('@/components/Map'), {
 
 export default function Home() {
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [clusterConfigs, setClusterConfigs] = useState<ClusterConfig[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [clusterName, setClusterName] = useState('');
+  const [lastDrawnShape, setLastDrawnShape] = useState<Partial<ClusterConfig> | null>(null);
   const [geocodingId, setGeocodingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => { fetchCustomers(); }, []);
+  useEffect(() => {
+    fetchCustomers();
+    fetchConfigs();
+  }, []);
+
+  const fetchConfigs = async () => {
+    try {
+      const res = await fetch('/api/clusters/config');
+      const data = await res.json();
+      setClusterConfigs(Array.isArray(data) ? data : []);
+    } catch { console.error('Failed to fetch configs'); }
+  };
 
   const fetchCustomers = async () => {
     try {
@@ -35,14 +48,30 @@ export default function Home() {
     if (!clusterName.trim() || selectedIds.length === 0) return;
     setSaving(true);
     try {
+      // 1. Assign cluster_id to selected customers
       await fetch('/api/customers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ updates: selectedIds.map(id => ({ id, cluster_id: clusterName.trim() })) }),
       });
+
+      // 2. Save boundary if we have one
+      if (lastDrawnShape) {
+        await fetch('/api/clusters/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: clusterName.trim(),
+            ...lastDrawnShape
+          }),
+        });
+        await fetchConfigs();
+      }
+
       await fetchCustomers();
       setSelectedIds([]);
       setClusterName('');
+      setLastDrawnShape(null);
     } finally { setSaving(false); }
   };
 
@@ -110,7 +139,7 @@ export default function Home() {
               <Layers size={13} className="group-hover:rotate-12 transition-transform" />
               View Clusters
             </a>
-     
+
           </div>
         </header>
 
@@ -155,6 +184,8 @@ export default function Home() {
               customers={customers}
               selectedIds={selectedIds}
               onSelection={setSelectedIds}
+              onShapeDrawn={setLastDrawnShape}
+              clusterConfigs={clusterConfigs}
               geocodingMode={geocodingId ? { customerId: geocodingId, onPin: handlePinLocation } : undefined}
             />
           </div>
