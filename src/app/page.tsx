@@ -8,7 +8,7 @@ import { AlertCircle, CheckCircle2, MapPin, Layers, Save, X } from 'lucide-react
 const Map = dynamic(() => import('@/components/Map'), {
   ssr: false,
   loading: () => (
-    <div className="w-full bg-slate-900 animate-pulse rounded-2xl flex items-center justify-center text-slate-400" style={{ height: 'calc(100vh - 180px)', minHeight: 500 }}>
+    <div className="w-full bg-slate-900 animate-pulse rounded-2xl flex items-center justify-center text-slate-400" style={{ height: 'calc(100vh - 120px)', minHeight: 500 }}>
       Loading Map…
     </div>
   ),
@@ -64,20 +64,53 @@ export default function Home() {
 
   const mappedCustomers = customers.filter(c => c.lat && c.lng);
   const unmappedCustomers = customers.filter(c => !c.lat || !c.lng);
+  const clusteredCount = mappedCustomers.filter(c => c.cluster_id).length;
   const clusters = Array.from(new Set(mappedCustomers.filter(c => c.cluster_id).map(c => c.cluster_id)));
 
   return (
     <main className="min-h-screen bg-[#0f172a] text-slate-100 font-sans">
       <div className="max-w-[1700px] mx-auto px-6 pt-6 pb-4 space-y-5">
         {/* Header */}
-        <header className="flex justify-between items-end border-b border-white/5 pb-4">
-          <div>
-            <h1 className="text-3xl font-black tracking-tight bg-gradient-to-r from-indigo-400 via-purple-400 to-cyan-400 bg-clip-text text-transparent">
-              ClusterMap Pro
+        <header className="flex justify-between items-center border-b border-white/5 pb-3">
+          <div className="shrink-0">
+            <h1 className="text-xl font-black tracking-tight bg-gradient-to-r from-indigo-400 via-purple-400 to-cyan-400 bg-clip-text text-transparent">
+              Clustering Map Pro Max
             </h1>
-            <p className="text-slate-400 text-sm mt-1">
-              {mappedCustomers.length} mapped · {unmappedCustomers.length} unmapped · {clusters.length} clusters
-            </p>
+          </div>
+
+          {/* Stats Boxes - In the middle */}
+          <div className="hidden md:flex items-center gap-3">
+            <div className="bg-slate-900/60 border border-white/5 px-3 py-1.5 rounded-xl flex items-center gap-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Mapped</span>
+              <span className="text-xs font-black text-white">{mappedCustomers.length}</span>
+            </div>
+            <div className="bg-slate-900/60 border border-white/5 px-3 py-1.5 rounded-xl flex items-center gap-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Clustered</span>
+              <span className="text-xs font-black text-white">{clusteredCount}</span>
+            </div>
+            <div className="bg-slate-900/60 border border-white/5 px-3 py-1.5 rounded-xl flex items-center gap-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Unmapped</span>
+              <span className="text-xs font-black text-white">{unmappedCustomers.length}</span>
+            </div>
+            <div className="bg-slate-900/60 border border-white/5 px-3 py-1.5 rounded-xl flex items-center gap-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Clusters</span>
+              <span className="text-xs font-black text-white">{clusters.length}</span>
+            </div>
+          </div>
+
+          <div className="flex gap-3">
+            <a
+              href="/clusters"
+              className="group flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-indigo-400 hover:text-indigo-300 transition-all px-4 py-1.5 bg-indigo-500/10 rounded-xl border border-indigo-500/20"
+            >
+              <Layers size={13} className="group-hover:rotate-12 transition-transform" />
+              View Clusters
+            </a>
+     
           </div>
         </header>
 
@@ -87,7 +120,7 @@ export default function Home() {
 
           {/* Left: Unmapped Customers */}
           <div className="xl:col-span-2">
-            <div className="bg-slate-800/40 border border-white/10 rounded-2xl p-4 shadow-xl flex flex-col" style={{ height: 'calc(100vh - 180px)', minHeight: 500 }}>
+            <div className="bg-slate-800/40 border border-white/10 rounded-2xl p-4 shadow-xl flex flex-col" style={{ height: 'calc(100vh - 120px)', minHeight: 500 }}>
               <div className="flex items-center gap-2 mb-3 text-amber-400">
                 <AlertCircle size={16} />
                 <h2 className="font-bold text-xs uppercase tracking-wider">Unmapped ({unmappedCustomers.length})</h2>
@@ -127,11 +160,11 @@ export default function Home() {
           </div>
 
           {/* Right: Cluster Assignment + Inventory */}
-          <div className="xl:col-span-2 flex flex-col gap-4" style={{ height: 'calc(100vh - 180px)', minHeight: 500 }}>
+          <div className="xl:col-span-2 flex flex-col gap-4" style={{ height: 'calc(100vh - 120px)', minHeight: 500 }}>
 
             {/* Cluster Assignment Panel — always visible */}
             <div className="bg-slate-800/40 border border-white/10 rounded-2xl p-4 shadow-xl relative overflow-hidden">
-              <div className="absolute top-0 left-0 w-1 h-full bg-indigo-500 opacity-60" />
+              <div className="absolute top-0 left-0 w-1 h-full  opacity-60" />
               <div className="flex items-center gap-2 mb-4 text-indigo-400">
                 <Layers size={16} />
                 <h2 className="font-bold text-xs uppercase tracking-wider">Assign Cluster</h2>

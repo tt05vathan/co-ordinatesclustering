@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Tooltip, useMap, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Tooltip, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import '@geoman-io/leaflet-geoman-free';
 import '@geoman-io/leaflet-geoman-free/dist/leaflet-geoman.css';
@@ -28,6 +28,14 @@ const SelectedIcon = L.icon({
     popupAnchor: [1, -34],
 });
 
+const ClusteredIcon = L.icon({
+    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
+    shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+});
+
 type MapProps = {
     customers: Customer[];
     selectedIds: string[];
@@ -36,6 +44,8 @@ type MapProps = {
         customerId: string;
         onPin: (lat: number, lng: number) => void;
     };
+    clusterColors?: Record<string, string>;
+    fullHeight?: boolean;
 };
 
 function GeomanControls({ onDraw }: { onDraw: (layer: L.Layer) => void }) {
@@ -98,7 +108,18 @@ function FullscreenControl() {
     );
 }
 
-export default function Map({ customers, selectedIds, onSelection, geocodingMode }: MapProps) {
+// Helper to create colored markers
+const createColorIcon = (color: string) => {
+    return new L.DivIcon({
+        className: 'custom-div-icon',
+        html: `<div style="background-color: ${color}; width: 14px; height: 14px; border: 2px solid white; border-radius: 50%; box-shadow: 0 0 10px rgba(0,0,0,0.5);"></div>`,
+        iconSize: [14, 14],
+        iconAnchor: [7, 7],
+        popupAnchor: [0, -7],
+    });
+};
+
+export default function Map({ customers, selectedIds, onSelection, geocodingMode, clusterColors, fullHeight }: MapProps) {
     const center: [number, number] = [17.3850, 78.4867];
     const mapRef = useRef<L.Map>(null);
 
@@ -137,8 +158,8 @@ export default function Map({ customers, selectedIds, onSelection, geocodingMode
 
     return (
         <div
-            className={`relative w-full rounded-2xl overflow-hidden shadow-2xl border transition-all duration-300 ${geocodingMode ? 'border-amber-400 ring-4 ring-amber-400/20' : selectedIds.length > 0 ? 'border-indigo-500/60' : 'border-white/10'}`}
-            style={{ height: 'calc(100vh - 180px)', minHeight: 500 }}
+            className={`relative w-full overflow-hidden shadow-2xl border transition-all duration-300 ${fullHeight ? 'rounded-none border-none' : 'rounded-2xl border-white/10'} ${geocodingMode ? 'border-amber-400 ring-4 ring-amber-400/20' : selectedIds.length > 0 ? 'border-indigo-500/60' : ''}`}
+            style={{ height: fullHeight ? '100%' : 'calc(100vh - 120px)', minHeight: fullHeight ? 'auto' : 500 }}
         >
             {geocodingMode && (
                 <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] bg-amber-400 text-amber-950 px-4 py-2 rounded-full font-bold shadow-lg animate-bounce text-sm whitespace-nowrap">
@@ -161,29 +182,34 @@ export default function Map({ customers, selectedIds, onSelection, geocodingMode
 
                 {customers.filter(c => c.lat && c.lng).map(customer => {
                     const isSelected = selectedIds.includes(customer.id);
+                    const isClustered = !!customer.cluster_id;
+
+                    let icon;
+                    if (clusterColors && customer.cluster_id) {
+                        // In Clusters View, use specific colors
+                        icon = createColorIcon(clusterColors[customer.cluster_id]);
+                    } else if (isSelected) {
+                        // Selection takes priority
+                        icon = SelectedIcon;
+                    } else if (isClustered) {
+                        // Already clustered = Green
+                        icon = ClusteredIcon;
+                    } else {
+                        // Default = Blue
+                        icon = DefaultIcon;
+                    }
+
                     return (
                         <Marker
                             key={customer.id}
                             position={[customer.lat!, customer.lng!]}
-                            icon={isSelected ? SelectedIcon : DefaultIcon}
+                            icon={icon}
                             eventHandlers={{ click: () => toggleMarker(customer.id) }}
                         >
                             <Tooltip direction="top" offset={[0, -36]} opacity={1}>
                                 <span style={{ fontWeight: 600 }}>{customer.name}</span>
                                 {customer.cluster_id && <span style={{ color: '#6366f1', marginLeft: 4 }}>#{customer.cluster_id}</span>}
                             </Tooltip>
-                            <Popup>
-                                <div style={{ fontFamily: 'system-ui', padding: '2px 0', minWidth: 160 }}>
-                                    <p style={{ fontWeight: 700, fontSize: 14, color: '#1e293b', marginBottom: 2 }}>{customer.name}</p>
-                                    <p style={{ fontSize: 11, color: '#64748b', fontFamily: 'monospace', marginBottom: 6 }}>{customer.id}</p>
-                                    <div style={{ fontSize: 11, color: customer.cluster_id ? '#4f46e5' : '#94a3b8', fontWeight: 600 }}>
-                                        Cluster: {customer.cluster_id || 'Not assigned'}
-                                    </div>
-                                    <div style={{ marginTop: 8, fontSize: 11, color: isSelected ? '#22c55e' : '#94a3b8' }}>
-                                        {isSelected ? '✓ Selected' : 'Click marker to select'}
-                                    </div>
-                                </div>
-                            </Popup>
                         </Marker>
                     );
                 })}
