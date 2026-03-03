@@ -5,25 +5,25 @@ export async function GET() {
     try {
         const customers = await kv.get<Customer[]>('customers') || [];
         return NextResponse.json(customers);
-    } catch (error) {
+    } catch {
         return NextResponse.json({ error: 'Failed to fetch customers' }, { status: 500 });
     }
 }
 
 export async function POST(req: Request) {
     try {
-        const { updates }: { updates: { id: string, cluster_id: string }[] } = await req.json();
+        const { updates }: { updates: { id: string, cluster_id?: string, lat?: number, lng?: number }[] } = await req.json();
         const customers = await kv.get<Customer[]>('customers') || [];
 
         const newCustomers = customers.map(c => {
             const update = updates.find(u => u.id === c.id);
-            return update ? { ...c, cluster_id: update.cluster_id } : c;
+            return update ? { ...c, ...update } : c;
         });
 
         await kv.set('customers', newCustomers);
         return NextResponse.json({ success: true });
-    } catch (error) {
-        return NextResponse.json({ error: 'Failed to update clusters' }, { status: 500 });
+    } catch {
+        return NextResponse.json({ error: 'Failed to update customers' }, { status: 500 });
     }
 }
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import '@geoman-io/leaflet-geoman-free';
 import '@geoman-io/leaflet-geoman-free/dist/leaflet-geoman.css';
@@ -22,6 +22,10 @@ L.Marker.prototype.options.icon = DefaultIcon;
 type MapProps = {
     customers: Customer[];
     onSelection: (customerIds: string[]) => void;
+    geocodingMode?: {
+        customerId: string;
+        onPin: (lat: number, lng: number) => void;
+    };
 };
 
 function GeomanControls({ onDraw }: { onDraw: (layer: L.Layer) => void }) {
@@ -46,7 +50,6 @@ function GeomanControls({ onDraw }: { onDraw: (layer: L.Layer) => void }) {
 
         map.on('pm:create', (e: { layer: L.Layer }) => {
             onDraw(e.layer);
-            // Remove the drawn shape after selection to keep map clean
             map.removeLayer(e.layer);
         });
 
@@ -59,8 +62,20 @@ function GeomanControls({ onDraw }: { onDraw: (layer: L.Layer) => void }) {
     return null;
 }
 
-export default function Map({ customers, onSelection }: MapProps) {
-    const center: [number, number] = [12.9716, 77.5946]; // Bangalore default
+function MapEvents({ onMapClick, active }: { onMapClick: (lat: number, lng: number) => void, active: boolean }) {
+    useMapEvents({
+        click(e) {
+            if (active) {
+                onMapClick(e.latlng.lat, e.latlng.lng);
+            }
+        },
+    });
+    return null;
+}
+
+export default function Map({ customers, onSelection, geocodingMode }: MapProps) {
+    const center: [number, number] = [12.9716, 77.5946];
+    const mapRef = useRef<L.Map>(null);
 
     const handleDraw = (layer: L.Layer) => {
         const selectedIds: string[] = [];
@@ -68,21 +83,23 @@ export default function Map({ customers, onSelection }: MapProps) {
         if (layer instanceof L.Circle) {
             const center = layer.getLatLng();
             const radius = layer.getRadius();
-
             customers.forEach(c => {
-                const dist = mapRef.current?.distance(center, [c.lat, c.lng]);
-                if (dist !== undefined && dist <= radius) {
-                    selectedIds.push(c.id);
+                if (c.lat && c.lng) {
+                    const dist = mapRef.current?.distance(center, [c.lat, c.lng]);
+                    if (dist !== undefined && dist <= radius) {
+                        selectedIds.push(c.id);
+                    }
                 }
             });
         } else if (layer instanceof L.Polygon) {
             const coords = layer.getLatLngs()[0] as L.LatLng[];
             const turfPoly = turfPolygon([coords.map(latlng => [latlng.lng, latlng.lat]).concat([[coords[0].lng, coords[0].lat]])]);
-
             customers.forEach(c => {
-                const pt = point([c.lng, c.lat]);
-                if (booleanPointInPolygon(pt, turfPoly)) {
-                    selectedIds.push(c.id);
+                if (c.lat && c.lng) {
+                    const pt = point([c.lng, c.lat]);
+                    if (booleanPointInPolygon(pt, turfPoly)) {
+                        selectedIds.push(c.id);
+                    }
                 }
             });
         }
@@ -92,10 +109,13 @@ export default function Map({ customers, onSelection }: MapProps) {
         }
     };
 
-    const mapRef = useRef<L.Map>(null);
-
     return (
-        <div className="w-full h-[600px] rounded-2xl overflow-hidden shadow-2xl border border-white/10 relative group">
+        <div className={`w-full h-[600px] rounded-2xl overflow-hidden shadow-2xl border transition-all duration-300 ${geocodingMode ? 'border-amber-400 ring-4 ring-amber-400/20' : 'border-white/10'}`}>
+            {geocodingMode && (
+                <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] bg-amber-400 text-amber-950 px-4 py-2 rounded-full font-bold shadow-lg animate-bounce text-sm">
+                    Select location on map for customer {geocodingMode.customerId}
+                </div>
+            )}
             <MapContainer
                 center={center}
                 zoom={13}
@@ -107,10 +127,14 @@ export default function Map({ customers, onSelection }: MapProps) {
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                 />
                 <GeomanControls onDraw={handleDraw} />
-                {customers.map((customer) => (
+                <MapEvents
+                    active={!!geocodingMode}
+                    onMapClick={(lat, lng) => geocodingMode?.onPin(lat, lng)}
+                />
+                {customers.filter(c => c.lat && c.lng).map((customer) => (
                     <Marker
                         key={customer.id}
-                        position={[customer.lat, customer.lng]}
+                        position={[customer.lat!, customer.lng!]}
                         eventHandlers={{
                             click: () => onSelection([customer.id])
                         }}
@@ -118,7 +142,7 @@ export default function Map({ customers, onSelection }: MapProps) {
                         <Popup>
                             <div className="p-2">
                                 <h3 className="font-bold text-gray-800">{customer.name}</h3>
-                                <p className="text-sm text-gray-600">ID: {customer.id}</p>
+                                <p className="text-sm text-gray-600 font-mono">ID: {customer.id}</p>
                                 <p className="text-sm font-semibold text-indigo-600">
                                     Cluster: {customer.cluster_id || 'Unassigned'}
                                 </p>

@@ -5,7 +5,7 @@ export { kv };
 export type Customer = {
     id: string;
     name: string;
-    lat: number;
-    lng: number;
+    lat?: number;
+    lng?: number;
     cluster_id?: string;
 };
