@@ -1,5 +1,5 @@
 import { kv } from '@vercel/kv';
-import * as XLSX from 'xlsx';
+import XLSX from 'xlsx';
 import * as dotenv from 'dotenv';
 import { resolve } from 'path';
 
@@ -21,7 +21,7 @@ async function importExcel(filePath) {
         const customers = data.map((row, index) => {
             // Prioritize string ID column if exists
             const id = row['ID'] || row['id'] || row['Customer ID'] || row['customer_id'];
-            const name = row['Customer Name'] || row['name'] || row['Name'] || `Customer ${index + 1}`;
+            const name = row['customer_name'] || row['name'] || row['Name'] || `Customer ${index + 1}`;
 
             // Handle coordinates
             let lat = parseFloat(row['Latitude'] || row['lat'] || row['latitude']);
