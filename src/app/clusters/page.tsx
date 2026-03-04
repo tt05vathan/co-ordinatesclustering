@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { Customer } from '@/lib/kv';
+import { Customer, ClusterConfig } from '@/lib/kv';
 import { Save, X, ArrowLeft, RefreshCw, Edit3 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -22,10 +22,25 @@ interface RenamingState {
 
 export default function ClustersPage() {
     const [customers, setCustomers] = useState<Customer[]>([]);
+    const [clusterConfigs, setClusterConfigs] = useState<ClusterConfig[]>([]);
+    const [selectedIds, setSelectedIds] = useState<string[]>([]);
+    const [newClusterName, setNewClusterName] = useState('');
+    const [lastDrawnShape, setLastDrawnShape] = useState<Partial<ClusterConfig> | null>(null);
     const [loading, setLoading] = useState(false);
     const [renamingCluster, setRenamingCluster] = useState<RenamingState | null>(null);
 
-    useEffect(() => { fetchCustomers(); }, []);
+    useEffect(() => {
+        fetchCustomers();
+        fetchConfigs();
+    }, []);
+
+    const fetchConfigs = async () => {
+        try {
+            const res = await fetch('/api/clusters/config');
+            const data = await res.json();
+            setClusterConfigs(Array.isArray(data) ? data : []);
+        } catch { console.error('Failed to fetch configs'); }
+    };
 
     const fetchCustomers = async () => {
         try {
@@ -58,7 +73,53 @@ export default function ClustersPage() {
                 body: JSON.stringify({ updates: clusterCustomers.map(c => ({ id: c.id, cluster_id: renamingCluster.newName })) }),
             });
             await fetchCustomers();
+
+            // 2. Save boundary if we have one
+            if (lastDrawnShape) {
+                await fetch('/api/clusters/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        id: renamingCluster.newName,
+                        ...lastDrawnShape
+                    }),
+                });
+                await fetchConfigs();
+                setLastDrawnShape(null);
+            }
+
             setRenamingCluster(null);
+        } finally { setLoading(false); }
+    };
+
+    const createNewCluster = async () => {
+        if (!newClusterName.trim() || selectedIds.length === 0) return;
+        setLoading(true);
+        try {
+            // 1. Assign cluster_id to selected customers
+            await fetch('/api/customers', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ updates: selectedIds.map(id => ({ id, cluster_id: newClusterName })) }),
+            });
+
+            // 2. Save boundary if we have one
+            if (lastDrawnShape) {
+                await fetch('/api/clusters/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        id: newClusterName,
+                        ...lastDrawnShape
+                    }),
+                });
+                await fetchConfigs();
+            }
+
+            await fetchCustomers();
+            setSelectedIds([]);
+            setNewClusterName('');
+            setLastDrawnShape(null);
         } finally { setLoading(false); }
     };
 
@@ -89,6 +150,36 @@ export default function ClustersPage() {
                             {clustersList.length} active groups
                         </p>
                     </div>
+
+                    {selectedIds.length > 0 && (
+                        <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-2xl p-4 space-y-3 animate-in fade-in slide-in-from-top-4 duration-300">
+                            <div className="flex justify-between items-center">
+                                <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-400">New Cluster</span>
+                                <button onClick={() => { setSelectedIds([]); setLastDrawnShape(null); }} className="text-slate-500 hover:text-rose-400 transition-colors">
+                                    <X size={14} />
+                                </button>
+                            </div>
+                            <p className="text-[10px] text-slate-300">
+                                {selectedIds.length} customers selected. Name this group to save the boundary.
+                            </p>
+                            <div className="flex gap-2">
+                                <input
+                                    placeholder="Enter Name..."
+                                    value={newClusterName}
+                                    onChange={e => setNewClusterName(e.target.value)}
+                                    onKeyDown={e => e.key === 'Enter' && createNewCluster()}
+                                    className="flex-1 bg-slate-900/50 border border-white/10 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:border-indigo-500 transition-colors"
+                                />
+                                <button
+                                    onClick={createNewCluster}
+                                    disabled={!newClusterName.trim()}
+                                    className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white p-2 rounded-lg transition-colors"
+                                >
+                                    <Save size={16} />
+                                </button>
+                            </div>
+                        </div>
+                    )}
 
                     <div className="flex-1 overflow-y-auto pr-2 space-y-4 custom-scrollbar">
                         {clustersList.map((clusterName, idx) => {
@@ -167,9 +258,11 @@ export default function ClustersPage() {
                 <div className="flex-1 relative">
                     <Map
                         customers={mappedCustomers}
-                        selectedIds={[]}
-                        onSelection={() => { }}
+                        selectedIds={selectedIds}
+                        onSelection={setSelectedIds}
+                        onShapeDrawn={setLastDrawnShape}
                         clusterColors={clusterColors}
+                        clusterConfigs={clusterConfigs}
                         fullHeight={true}
                     />
                 </div>
